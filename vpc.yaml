@@ -77,3 +77,116 @@ Resources:
       Tags:
         - Key: 'Name'
           Value: 'DatabasePrivateSubnet2B'
+  # Internet Gateway
+  InternetGateway:
+    Type: 'AWS::EC2::InternetGateway'
+    Properties:
+      Tags:
+        - Key: 'Name'
+          Value: 'MyInternetGateway'
+  # Attach Internet Gateway to VPC
+  AttachInternetGateway:
+    Type: 'AWS::EC2::VPCGatewayAttachment'
+    Properties:
+      VpcId: !Ref MyVPC
+      InternetGatewayId: !Ref InternetGateway
+  # Route Table for Public Subnets
+  PublicRouteTable:
+    Type: 'AWS::EC2::RouteTable'
+    Properties:
+      VpcId: !Ref MyVPC
+      Tags:
+        - Key: 'Name'
+          Value: 'PublicRouteTable'
+  # Public Route
+  PublicRoute:
+    Type: 'AWS::EC2::Route'
+    DependsOn: AttachInternetGateway
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: '0.0.0.0/0'
+      GatewayId: !Ref InternetGateway
+  # Associate Public Subnet 1A with Public Route Table
+  PublicSubnet1ARouteTableAssociation:
+    Type: 'AWS::EC2::SubnetRouteTableAssociation'
+    Properties:
+      SubnetId: !Ref PublicSubnet1A
+      RouteTableId: !Ref PublicRouteTable
+  # Associate Public Subnet 2B with Public Route Table
+  PublicSubnet2BRouteTableAssociation:
+    Type: 'AWS::EC2::SubnetRouteTableAssociation'
+    Properties:
+      SubnetId: !Ref PublicSubnet2B
+      RouteTableId: !Ref PublicRouteTable
+  # Bastion Host EC2 Instance
+  BastionHost:
+    Type: 'AWS::EC2::Instance'
+    Properties:
+      InstanceType: 't2.micro'
+      KeyName: Bastion
+      ImageId: 'ami-0521cb2d60cfbb1a6'
+      SubnetId: !Ref PublicSubnet1A
+      SecurityGroupIds:
+        - !Ref BastionSecurityGroup
+      Tags:
+        - Key: 'Name'
+          Value: 'BastionHost'
+  # Bastion Security Group
+  BastionSecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: 'Allow SSH access to Bastion Host'
+      VpcId: !Ref MyVPC
+      SecurityGroupIngress:
+        - IpProtocol: 'tcp'
+          FromPort: 22
+          ToPort: 22
+          CidrIp: '71.163.240.243/32'
+  # AppInstance1 in App Private Subnet 1A
+  AppInstance1:
+    Type: 'AWS::EC2::Instance'
+    Properties:
+      InstanceType: 't2.micro'
+      KeyName: Bastion
+      ImageId: 'ami-0521cb2d60cfbb1a6'
+      SubnetId: !Ref AppPrivateSubnet1A
+      SecurityGroupIds:
+        - !Ref AppInstance1ASG
+      Tags:
+        - Key: 'Name'
+          Value: 'AppInstance1'
+  # AppInstance2 in App Private Subnet 2B
+  AppInstance2B:
+    Type: 'AWS::EC2::Instance'
+    Properties:
+      InstanceType: 't2.micro'
+      KeyName: Bastion
+      ImageId: 'ami-0521cb2d60cfbb1a6'
+      SubnetId: !Ref AppPrivateSubnet2B
+      SecurityGroupIds:
+        - !Ref AppInstance2BASG
+      Tags:
+        - Key: 'Name'
+          Value: 'AppInstance2'
+  # Security Group for AppInstance1
+  AppInstance1ASG:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: 'Allow traffic from Bastion Host to AppInstance1'
+      VpcId: !Ref MyVPC
+      SecurityGroupIngress:
+        - IpProtocol: 'tcp'
+          FromPort: 22  
+          ToPort: 22
+          SourceSecurityGroupId: !Ref BastionSecurityGroup
+  # Security Group for AppInstance2B
+  AppInstance2BASG:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: 'Allow ICMP Ping from App1'
+      VpcId: !Ref MyVPC
+      SecurityGroupIngress:
+        - IpProtocol: icmp
+          FromPort: -1
+          ToPort: -1
+          SourceSecurityGroupId: !Ref AppInstance1ASG
